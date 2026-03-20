@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebGL Fluid Interaction</title>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
+
+<style>
+body { margin:0; overflow:hidden; background:black; }
+</style>
+</head>
+<body>
+
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ alpha:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+camera.position.z = 5;
+
+// particles
+const count = 3000;
+const geometry = new THREE.BufferGeometry();
+const positions = new Float32Array(count * 3);
+const velocities = [];
+
+for(let i=0;i<count;i++){
+    positions[i*3] = (Math.random()-0.5)*5;
+    positions[i*3+1] = (Math.random()-0.5)*5;
+    positions[i*3+2] = (Math.random()-0.5)*5;
+    velocities.push(new THREE.Vector3());
+}
+
+geometry.setAttribute('position', new THREE.BufferAttribute(positions,3));
+
+// shader (fluid-like)
+const material = new THREE.ShaderMaterial({
+    uniforms: {
+        time: { value: 0 },
+        intensity: { value: 1.0 }
+    },
+    vertexShader: `
+        uniform float time;
+        void main(){
+            vec3 pos = position;
+
+            float wave = sin(pos.x * 3.0 + time) + cos(pos.y * 3.0 + time);
+            pos.z += wave * 0.2;
+
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.0);
+            gl_PointSize = 3.0;
+        }
+    `,
+    fragmentShader: `
+        uniform float time;
+        uniform float intensity;
+        void main(){
+            float r = 0.5 + 0.5*sin(time);
+            float g = 0.5 + 0.5*sin(time+2.0);
+            float b = 0.5 + 0.5*sin(time+4.0);
+            gl_FragColor = vec4(r,g,b,intensity);
+        }
+    `,
+    transparent:true
+});
+
+const points = new THREE.Points(geometry, material);
+scene.add(points);
+
+// mouse interaction
+let mouse = new THREE.Vector3(0,0,0);
+
+$(document).on('mousemove', function(e){
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+// click explosion
+$(document).on('click', function(){
+    for(let i=0;i<count;i++){
+        velocities[i].x = (Math.random()-0.5)*0.7;
+        velocities[i].y = (Math.random()-0.5)*0.7;
+        velocities[i].z = (Math.random()-0.5)*0.7;
+    }
+});
+
+// GUI
+const params = {
+    speed: 1.0,
+    intensity: 1.0,
+    mouseForce: 0.05
+};
+
+const gui = new dat.GUI();
+gui.add(params, 'speed', 0.1, 5.0);
+gui.add(params, 'intensity', 0.1, 2.0);
+gui.add(params, 'mouseForce', 0.01, 0.2);
+
+// animation
+function animate(){
+    requestAnimationFrame(animate);
+
+    material.uniforms.time.value += 0.01 * params.speed;
+    material.uniforms.intensity.value = params.intensity;
+
+    const pos = geometry.attributes.position.array;
+
+    for(let i=0;i<count;i++){
+        let dx = mouse.x - pos[i*3] * 0.2;
+        let dy = mouse.y - pos[i*3+1] * 0.2;
+
+        velocities[i].x += dx * params.mouseForce;
+        velocities[i].y += dy * params.mouseForce;
+
+        pos[i*3] += velocities[i].x;
+        pos[i*3+1] += velocities[i].y;
+        pos[i*3+2] += velocities[i].z;
+
+        velocities[i].multiplyScalar(0.92);
+    }
+
+    geometry.attributes.position.needsUpdate = true;
+    renderer.render(scene, camera);
+}
+
+animate();
+
+// resize
+$(window).on('resize', function(){
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultra Neon World 3D</title>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
+
+<style>
+body { margin:0; overflow:hidden; background:black; }
+video { position:fixed; width:100%; height:100%; object-fit:cover; z-index:-2; }
+canvas { position:fixed; top:0; left:0; }
+</style>
+</head>
+<body>
+
+<video autoplay muted loop>
+<source src="background.mp4" type="video/mp4">
+</video>
+
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({alpha:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// BLOOM
+const composer = new THREE.EffectComposer(renderer);
+composer.addPass(new THREE.RenderPass(scene, camera));
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.5, 0.4, 0.85);
+composer.addPass(bloom);
+
+camera.position.z = 6;
+
+// LIGHT
+const light = new THREE.PointLight(0x00ffff, 2, 50);
+light.position.set(0,0,5);
+scene.add(light);
+
+// ===== LOAD MODELS =====
+const loader = new THREE.GLTFLoader();
+let models = [];
+let currentModel = null;
+
+function loadModel(path, scale=1){
+    loader.load(path, (gltf)=>{
+        const m = gltf.scene;
+        m.scale.set(scale,scale,scale);
+        m.position.z = -3;
+        m.visible = false;
+        scene.add(m);
+        models.push(m);
+
+        if(models.length === 1){
+            m.visible = true;
+            currentModel = m;
+        }
+    });
+}
+
+// Твои модели (положи рядом)
+loadModel('castle.glb', 1.5);
+loadModel('village.glb', 1.5);
+loadModel('city.glb', 1.5);
+
+// смена сцен
+let index = 0;
+setInterval(()=>{
+    if(models.length < 2) return;
+
+    models[index].visible = false;
+    index = (index+1) % models.length;
+    models[index].visible = true;
+    currentModel = models[index];
+}, 6000);
+
+// ===== PARTICLES =====
+const count = 1500;
+const geo = new THREE.BufferGeometry();
+const pos = new Float32Array(count*3);
+const vel = [];
+
+for(let i=0;i<count;i++){
+ pos[i*3]=(Math.random()-0.5)*5;
+ pos[i*3+1]=(Math.random()-0.5)*5;
+ pos[i*3+2]=(Math.random()-0.5)*5;
+ vel.push(new THREE.Vector3());
+}
+
+geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+
+const mat = new THREE.PointsMaterial({color:0x00ffff, size:0.04});
+const points = new THREE.Points(geo, mat);
+scene.add(points);
+
+// ===== MOUSE =====
+let mouse={x:0,y:0};
+$(document).on('mousemove',e=>{
+ mouse.x=(e.clientX/innerWidth-0.5)*2;
+ mouse.y=(e.clientY/innerHeight-0.5)*2;
+});
+
+// CLICK
+$(document).on('click',()=>{
+ for(let i=0;i<count;i++){
+ vel[i].x=(Math.random()-0.5)*1;
+ vel[i].y=(Math.random()-0.5)*1;
+ vel[i].z=(Math.random()-0.5)*1;
+ }
+});
+
+// GUI
+const params={ bloom:1.5, mouseForce:0.05 };
+const gui=new dat.GUI();
+gui.add(params,'bloom',0,3).onChange(v=>bloom.strength=v);
+gui.add(params,'mouseForce',0.01,0.2);
+
+// ANIMATE
+function animate(){
+ requestAnimationFrame(animate);
+
+ for(let i=0;i<count;i++){
+ let i3=i*3;
+ vel[i].x+=(mouse.x-pos[i3])*params.mouseForce;
+ vel[i].y+=(mouse.y-pos[i3+1])*params.mouseForce;
+
+ pos[i3]+=vel[i].x;
+ pos[i3+1]+=vel[i].y;
+ pos[i3+2]+=vel[i].z;
+ vel[i].multiplyScalar(0.9);
+ }
+
+ // вращение модели
+ if(currentModel){
+     currentModel.rotation.y += 0.002;
+ }
+
+ // параллакс
+ camera.position.x += (mouse.x*2 - camera.position.x)*0.05;
+ camera.position.y += (mouse.y*2 - camera.position.y)*0.05;
+
+ geo.attributes.position.needsUpdate=true;
+ composer.render();
+}
+
+animate();
+
+window.addEventListener('resize',()=>{
+ renderer.setSize(innerWidth,innerHeight);
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ composer.setSize(innerWidth,innerHeight);
+});
+
+</script>
+</body>
+</html>

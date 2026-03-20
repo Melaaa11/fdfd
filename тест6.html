@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Medieval Castle</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+body { margin:0; overflow:hidden; background:#0a0a0a; }
+</style>
+</head>
+<body>
+
+<script>
+// ===== SCENE =====
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x0a0a0a, 5, 20);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(0,2,8);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// ===== LIGHT =====
+const ambient = new THREE.AmbientLight(0x666666);
+scene.add(ambient);
+
+const moon = new THREE.DirectionalLight(0xaaaaee, 1);
+moon.position.set(5,10,5);
+scene.add(moon);
+
+// ===== MATERIAL =====
+const stone = new THREE.MeshStandardMaterial({
+    color: 0x5a5a5a,
+    roughness: 0.9,
+    metalness: 0.1
+});
+
+// ===== CASTLE =====
+const castle = new THREE.Group();
+
+// башни
+function tower(x){
+    const geo = new THREE.CylinderGeometry(0.7,0.8,3,16);
+    const mesh = new THREE.Mesh(geo, stone);
+    mesh.position.set(x,0,0);
+
+    const roofGeo = new THREE.ConeGeometry(1,1.5,16);
+    const roofMat = new THREE.MeshStandardMaterial({color:0x3b2b2b});
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.y = 2.2;
+
+    mesh.add(roof);
+    return mesh;
+}
+
+// стены
+function wall(){
+    const geo = new THREE.BoxGeometry(5,2,1.2);
+    const mesh = new THREE.Mesh(geo, stone);
+    mesh.position.y = -0.5;
+    return mesh;
+}
+
+// ворота
+function gate(){
+    const geo = new THREE.BoxGeometry(1.5,1.8,1.3);
+    const mat = new THREE.MeshStandardMaterial({color:0x2a1a0a});
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0,-0.6,0.1);
+    return mesh;
+}
+
+castle.add(tower(-2.5));
+castle.add(tower(2.5));
+castle.add(wall());
+castle.add(gate());
+
+scene.add(castle);
+
+// ===== GROUND =====
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(50,50),
+    new THREE.MeshStandardMaterial({color:0x1a1a1a})
+);
+ground.rotation.x = -Math.PI/2;
+ground.position.y = -2;
+scene.add(ground);
+
+// ===== FOG PARTICLES =====
+const fogGeo = new THREE.BufferGeometry();
+const fogCount = 200;
+const fogPos = [];
+
+for(let i=0;i<fogCount;i++){
+    fogPos.push((Math.random()-0.5)*20);
+    fogPos.push(Math.random()*3 - 2);
+    fogPos.push((Math.random()-0.5)*20);
+}
+
+fogGeo.setAttribute('position', new THREE.Float32BufferAttribute(fogPos,3));
+
+const fogMat = new THREE.PointsMaterial({
+    color:0x888888,
+    size:0.2,
+    transparent:true,
+    opacity:0.3
+});
+
+const fog = new THREE.Points(fogGeo, fogMat);
+scene.add(fog);
+
+// ===== MOUSE =====
+let mouseX=0, mouseY=0;
+
+document.addEventListener('mousemove', e=>{
+    mouseX=(e.clientX/innerWidth-0.5)*2;
+    mouseY=(e.clientY/innerHeight-0.5)*2;
+});
+
+// ===== ANIMATE =====
+function animate(){
+    requestAnimationFrame(animate);
+
+    castle.rotation.y += 0.001;
+
+    // параллакс
+    camera.position.x += (mouseX*2 - camera.position.x)*0.03;
+    camera.position.y += (mouseY*1.5 - camera.position.y)*0.03;
+    camera.lookAt(0,0,0);
+
+    // движение тумана
+    const pos = fogGeo.attributes.position.array;
+    for(let i=0;i<fogCount;i++){
+        pos[i*3] += 0.002;
+        if(pos[i*3] > 10) pos[i*3] = -10;
+    }
+    fogGeo.attributes.position.needsUpdate = true;
+
+    renderer.render(scene, camera);
+}
+
+animate();
+
+// resize
+addEventListener('resize', ()=>{
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+});
+</script>
+
+</body>
+</html>
